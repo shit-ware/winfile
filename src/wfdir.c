@@ -17,7 +17,7 @@
 
 #include "wfdrop.h"
 
-WCHAR   szAttr[]        = L"RHSAC";
+WCHAR   szAttr[]        = L"RHSACE";
 
 typedef struct _SELINFO {
    LPWSTR pSel;
@@ -109,7 +109,8 @@ DrawItem(
    else
    {
       //
-      //  Set Text color of Compressed items to BLUE.
+      //  Set Text color of Compressed items to BLUE and Encrypted items
+      //  to GREEN.
       //
       //  LATER:
       //  Should allow for User selection in the future.
@@ -117,6 +118,10 @@ DrawItem(
       if ((lpxdta) && (lpxdta->dwAttrs & ATTR_COMPRESSED))
       {
          rgbText = SetTextColor(hDC, RGB(0, 0, 255));
+      }
+      else if ((lpxdta) && (lpxdta->dwAttrs & ATTR_ENCRYPTED))
+      {
+         rgbText = SetTextColor(hDC, RGB(0, 192, 0));
       }
       else
       {
@@ -599,7 +604,7 @@ DirWndProc(
       UINT  cItems;
       LPWSTR szItem;
       WCHAR rgchMatch[MAXPATHLEN];
-      INT cchMatch;
+      SIZE_T cchMatch;
 
       if ((ch = LOWORD(wParam)) <= CHAR_SPACE || !GetWindowLongPtr(hwnd, GWL_HDTA))
          return(-1L);
@@ -694,8 +699,8 @@ DirWndProc(
 
 #define lpds ((LPDROPSTRUCT)lParam)
 
-      iSelHilite = lpds->dwControlData;
-      DSRectItem(hwndLB, iSelHilite, (BOOL)wParam, FALSE);
+      iSelHighlight = lpds->dwControlData;
+      DSRectItem(hwndLB, iSelHighlight, (BOOL)wParam, FALSE);
       break;
 
 #undef lpds
@@ -720,16 +725,16 @@ DirWndProc(
 
          // Is it a new one?
 
-         if (iSel == iSelHilite && fOldShowSourceBitmaps == fShowSourceBitmaps)
+         if (iSel == iSelHighlight && fOldShowSourceBitmaps == fShowSourceBitmaps)
             break;
 
          fOldShowSourceBitmaps = fShowSourceBitmaps;
 
          // Yup, un-select the old item.
-         DSRectItem(hwndLB, iSelHilite, FALSE, FALSE);
+         DSRectItem(hwndLB, iSelHighlight, FALSE, FALSE);
 
          // Select the new one.
-         iSelHilite = iSel;
+         iSelHighlight = iSel;
          DSRectItem(hwndLB, iSel, TRUE, FALSE);
          break;
 
@@ -1303,7 +1308,7 @@ ChangeDisplay(
    case WM_CREATE:
 
       //
-      // dwNewView, dwNewSort and dwNewAddribs define the viewing
+      // dwNewView, dwNewSort and dwNewAttribs define the viewing
       // parameters of the new window (GLOBALS)
       // the window text of the parent window defines the
       // filespec and the directory to open up
@@ -1993,6 +1998,12 @@ PutAttributes(
       cch++;
    }
 
+   if (dwAttribute & ATTR_ENCRYPTED)
+   {
+      *pszStr++ = szAttr[5];
+      cch++;
+   }
+
    *pszStr = CHAR_NULL;
    return(cch);
 }
@@ -2263,7 +2274,7 @@ FixTabsAndThings(
 // Effects:
 //
 //    Listbox tabs array
-//       LB_SETCOLUMWIDTH
+//       LB_SETCOLUMNWIDTH
 //       or
 //       LB_SETHORIZONTALEXTENT
 //
@@ -2447,7 +2458,7 @@ Error:
 
       //
       // Now always set 0L since string is in lpxdta->byBitmap!
-      // tolken for no items
+      // token for no items
       //
       goto Error;
 
@@ -2900,8 +2911,10 @@ UsedAltname:
       if (iSelType & 1)
          goto GDSExit;
 
-      if ((!bLFNTest) && ((i + 1) < iMac))
-         lstrcat(p, szBlank);
+      if ((!bLFNTest) && ((i + 1) < iMac)) {
+          if (p)
+              lstrcat(p, szBlank);
+      }
    }
 
 GDSExit:
@@ -2945,7 +2958,7 @@ GDSDone:
 //          structure
 //
 //          hDTA->head.dwEntries must be < INTMAX since there is
-//          a conversion from dword to int.  bleech.
+//          a conversion from dword to int.  blech.
 //
 // Effects:
 //
@@ -3356,7 +3369,7 @@ GetDirStatus(
 
 
 HWND
-GetMDIChildFromDecendant(HWND hwnd)
+GetMDIChildFromDescendant(HWND hwnd)
 {
    HWND hwndT;
 

@@ -397,7 +397,7 @@ MessWithRenameDirPath(LPTSTR pszPath)
    // !! LATER !!
    //
    // Should we allow backslashes here also ?
-   // CheckSlashies(pszPath); or add || clause.
+   // CheckSlashes(pszPath); or add || clause.
    //
 
    lpsz = (CHAR_DQUOTE == pszPath[0]) ?
@@ -528,7 +528,7 @@ JAPANEND
          {
             TCHAR szDirs[MAXPATHLEN];
             LPTSTR rgszDirs[MAX_DRIVES];
-        	int drive, cchLeft, driveCur;
+            int drive, driveCur;
         	BOOL fFirst = TRUE;
             
             wParam = IDD_TO;
@@ -538,7 +538,6 @@ JAPANEND
 			driveCur = GetWindowLongPtr(hwndActive, GWL_TYPE);
 
 			lstrcpy(szDirs, TEXT("Other: "));
-   			cchLeft = MAXPATHLEN - wcslen(szDirs);
 
    			GetAllDirectories(rgszDirs);
 
@@ -546,16 +545,16 @@ JAPANEND
         	{
 				if (drive != driveCur && rgszDirs[drive] != NULL)
 				{
-	        		int cchT = wcslen(rgszDirs[drive]);
-    	    		if (cchLeft > 1)
-        			{
-        				if (!fFirst)
-	        				wcsncat(szDirs, TEXT(";"), 1);
-	        			fFirst = FALSE;
-        				wcsncat(szDirs, rgszDirs[drive], cchLeft-2);
-	        			cchLeft = MAXPATHLEN - wcslen(szDirs);
-	        		}
-	        	
+                    if (!fFirst)
+                    {
+                        wcsncat_s(szDirs, MAXPATHLEN, TEXT(";"), 1);
+                    }
+                    fFirst = FALSE;
+
+                    // NOTE: this call may truncate the result that goes in szDirs,
+                    // but due to the limited width of the dialog, we can't see it all anyway.
+                    wcsncat_s(szDirs, MAXPATHLEN, rgszDirs[drive], _TRUNCATE);
+
 	        		LocalFree(rgszDirs[drive]);
 	        	}
         	}
@@ -1123,8 +1122,8 @@ FillVersionList(HWND hDlg)
    for (j=0; VerQueryValueIndexW(lpVersionBuffer,
                                 szVersionKey,
                                 j,
-                                &lpszKey,
-                                &lpszValue,
+                                (LPVOID*)&lpszKey,
+                                (LPVOID*)&lpszValue,
                                 &cbValue);  j++) {
 
       if (!lstrcmp(lpszKey, szFileVersion) ||
@@ -1220,6 +1219,7 @@ InitPropertiesDialog(
    INT nType = 0;
    DWORD dwFlags;
    BOOL bFileCompression = FALSE;
+   BOOL bFileEncryption = FALSE;
 
    LPTSTR lpszBuf;
    LARGE_INTEGER qSize, qCSize;
@@ -1239,6 +1239,7 @@ InitPropertiesDialog(
    if (GetVolumeInformation(NULL, NULL, 0L, NULL, NULL, &dwFlags, NULL, 0L))
    {
       bFileCompression = ((dwFlags & FS_FILE_COMPRESSION) == FS_FILE_COMPRESSION);
+      bFileEncryption = ((dwFlags & FS_FILE_ENCRYPTION) == FS_FILE_ENCRYPTION);
    }
 
    iCount = 0;
@@ -1444,6 +1445,11 @@ FullPath:
          ShowWindow(GetDlgItem(hDlg, IDD_COMPRESSED), SW_HIDE);
       }
 
+      if (!bFileEncryption)
+      {
+         ShowWindow(GetDlgItem(hDlg, IDD_ENCRYPTED), SW_HIDE);
+      }
+
       PutSize(&qSize, szNum);
       wsprintf(szTemp, szSBytes, szNum);
       SetDlgItemText(hDlg, IDD_SIZE, szTemp);
@@ -1463,6 +1469,10 @@ FullPath:
           ShowWindow(GetDlgItem(hDlg, IDD_COMPRESSED), SW_HIDE);
       }
 
+      if (!bFileEncryption)
+      {
+          ShowWindow(GetDlgItem(hDlg, IDD_ENCRYPTED), SW_HIDE);
+      }
    }
 
    //
@@ -1554,12 +1564,19 @@ FullPath:
                      GWL_STYLE,
                      WS_VISIBLE | BS_AUTO3STATE | WS_CHILD);
    }
+   if (ATTR_ENCRYPTED & dwAttribs3State)
+   {
+      SetWindowLongPtr( GetDlgItem(hDlg, IDD_ENCRYPTED),
+                     GWL_STYLE,
+                     WS_VISIBLE | BS_AUTO3STATE | WS_CHILD | WS_DISABLED);
+   }
 
    CheckAttribsDlgButton(hDlg, IDD_READONLY,   ATTR_READONLY, dwAttribs3State, dwAttribsOn);
    CheckAttribsDlgButton(hDlg, IDD_HIDDEN,     ATTR_HIDDEN, dwAttribs3State, dwAttribsOn);
    CheckAttribsDlgButton(hDlg, IDD_ARCHIVE,    ATTR_ARCHIVE, dwAttribs3State, dwAttribsOn);
    CheckAttribsDlgButton(hDlg, IDD_SYSTEM,     ATTR_SYSTEM, dwAttribs3State, dwAttribsOn);
    CheckAttribsDlgButton(hDlg, IDD_COMPRESSED, ATTR_COMPRESSED, dwAttribs3State, dwAttribsOn);
+   CheckAttribsDlgButton(hDlg, IDD_ENCRYPTED,  ATTR_ENCRYPTED, dwAttribs3State, dwAttribsOn);
 
    return nType;
 }
@@ -1744,7 +1761,7 @@ AttribsDlgProc(register HWND hDlg, UINT wMsg, WPARAM wParam, LPARAM lParam)
 
             dwAttribs = GetFileAttributes(szName);
 
-            if (dwAttribs & 0x8000)     // BUG hardcoded!
+            if (dwAttribs == INVALID_FILE_ATTRIBUTES)
                goto AttributeError;
             else
                dwAttribs &= ~ATTR_DIR;
@@ -1941,6 +1958,3 @@ NoQuotes(LPTSTR szT)
    return TRUE;
 }
 
-
-
-

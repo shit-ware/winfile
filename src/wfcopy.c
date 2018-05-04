@@ -132,7 +132,7 @@ FindFileName(register LPTSTR pPath)
  */
 
 VOID
-AppendToPath(LPTSTR pPath, LPTSTR pMore)
+AppendToPath(LPTSTR pPath, LPCTSTR pMore)
 {
 
   /* Don't append a \ to empty paths. */
@@ -273,7 +273,7 @@ JAPANEND
     // Save it away.
     //
     StrNCpy(szTemp, lpszPath, COUNTOF(szTemp));
-    CheckSlashies(szTemp);
+    CheckSlashes(szTemp);
     StripColon(szTemp);
 
     nSpaceLeft = MAXPATHLEN - 1;
@@ -1365,7 +1365,7 @@ GetNameDialog(DWORD dwOp, LPTSTR pFrom, LPTSTR pTo)
 //           FUNC_COPY   - Copy files in pFrom to pTo
 //
 // OUTC pdwError         -- If error, this holds the err code else 0
-// INC  bIsLFNDestFrive  -- Is the dest drive lfn?
+// INC  bIsLFNDriveDest  -- Is the dest drive lfn?
 //
 // Return:   DWORD:
 //
@@ -2231,7 +2231,7 @@ WFMoveCopyDriverThread(PCOPYINFO pCopyInfo)
    //
    // Change all '/' characters to '\' characters in dest spec
    //
-   CheckSlashies(pCopyInfo->pFrom);
+   CheckSlashes(pCopyInfo->pFrom);
 
    //
    // Check for multiple source files
@@ -2526,14 +2526,11 @@ TRY_COPY_AGAIN:
 #endif
                      } else {
 
-                        if (pCopyInfo->dwFunc == FUNC_MOVE) {
-
-                           //
-                           // On move, must delete destination file
-                           // on copy, the fs does this for us.
-                           //
-                           ret = SafeFileRemove (szDest);
-                        }
+                         //
+                         // On move, must delete destination file
+                         // on copy, the fs does this for us.
+                         //
+                         ret = SafeFileRemove (szDest);
 
                          //
                          //  Reset the file attributes that may have been
@@ -2777,7 +2774,7 @@ SkipMKDir:
          //
          // On failure, restore attributes
          //
-         if (ret && (DWORD)-1 != dwAttr)
+         if (ret && INVALID_FILE_ATTRIBUTES != dwAttr)
             WFSetAttr(szSource, dwAttr);
 
          break;
@@ -3588,4 +3585,3 @@ CopyMoveRetry(LPTSTR pszDest, INT nError, PBOOL pbErrorOnDest)
 
    return 0;        // success
 }
-

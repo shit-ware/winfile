@@ -1,20 +1,33 @@
-# Windows File Manager (WinFile)
+# ![icon](winfile.png) Windows File Manager (WinFile)
 
 The Windows File Manager lives again and runs as a native x86 and x64 desktop app
-on all currently supported version of Windows,
-including Windows 10.  I welcome your thoughts, comments and suggestions.  There are two
-primary versions of the source code in the master branch:
+on all currently supported version of Windows, including Windows 10. I welcome your thoughts, comments and suggestions.
+
+There are two primary versions of the source code in the master branch:
 
 1. original_plus tag: refers to the source for WinFile as of Windows NT4 with minimal changes
 so that it compiles with Visual Studio and runs on current Windows.
 
 2. current master: contains my personal changes / additions to WinFile.
 
-I will consider bugs fixes and suggestions for minor changes to the master branch.  Feel free
-to create a pull request or post issues as you see fit.
+I will consider bugs fixes and suggestions for minor changes to the master branch.  Feel free to create a pull request or post issues as you see fit.
 
 I will not be changing the original_plus sources nor creating other branches for other purposes.
 You are welcome do that on your own.
+
+## Download The App
+If you just want to download the WinFile application without worrying about compiling from the source code, we have precompiled versions available for both original_plus as well as the latest stable release for you to download. Source code for the corresponding release is also, optionally, available.
+
+Please select the version which you would like to download.
+
+Latest build from master: coming soon
+
+[Latest Stable Release (v10.0)](https://github.com/Microsoft/winfile/releases/tag/v10.0)
+
+[Original_Plus](https://github.com/Microsoft/winfile/releases/tag/original_plus)
+
+To see more release binaries, including of older versions, [see the releases page](https://github.com/Microsoft/winfile/releases).
+
 
 ## History
 
@@ -73,7 +86,7 @@ instead of changing drives
 9. File.Search can include a date which limits the files returned to those after the date provided;
 the output is also sorted by the date instead of by the name
 10. File.Search includes an option as to whether to include sub-directories
-11. ctrl+K starts a command shell (ConEmu if installed) in the current directory; shfit+ctrl+K
+11. ctrl+K starts a command shell (ConEmu if installed) in the current directory; shift+ctrl+K
 starts an elevated command shell (cmd.exe only)
 12. File.Goto (ctrl+G) enables one to type a few words of a path and get a list of directories;
 selecting one changes to that directory.  Only drive c: is indexed.
@@ -86,6 +99,7 @@ You can read the code for more details.
 
 ## Contributing
 
+### Contributor License Agreement
 As mentioned above, this project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.microsoft.com.
@@ -97,6 +111,9 @@ provided by the bot. You will only need to do this once across all repos using o
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+### What Makes a Good Pull Request for WinFile?
+If you are interested in contributing and/or suggesting changes to the actual application, you might find it helpful to [read this post first](https://github.com/Microsoft/winfile/issues/88).
 
 ## License
 

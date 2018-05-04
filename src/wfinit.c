@@ -16,6 +16,7 @@
 #include "wnetcaps.h"         // WNetGetCaps()
 
 #include <ole2.h>
+#include <shlobj.h>
 
 typedef VOID (APIENTRY *FNPENAPP)(WORD, BOOL);
 
@@ -213,9 +214,11 @@ GetSettings()
    INT bfCharset;
 
    /* Get the flags out of the INI file. */
-   bMinOnRun       = GetPrivateProfileInt(szSettings, szMinOnRun,      bMinOnRun,      szTheINIFile);
-   wTextAttribs    = (WORD)GetPrivateProfileInt(szSettings, szLowerCase, wTextAttribs,   szTheINIFile);
-   bStatusBar      = GetPrivateProfileInt(szSettings, szStatusBar,     bStatusBar,     szTheINIFile);
+   bMinOnRun            = GetPrivateProfileInt(szSettings, szMinOnRun,            bMinOnRun,            szTheINIFile);
+   bIndexOnLaunch       = GetPrivateProfileInt(szSettings, szIndexOnLaunch,       bIndexOnLaunch,       szTheINIFile);
+   wTextAttribs         = (WORD)GetPrivateProfileInt(szSettings, szLowerCase,     wTextAttribs,         szTheINIFile);
+   bStatusBar           = GetPrivateProfileInt(szSettings, szStatusBar,           bStatusBar,           szTheINIFile);
+   bDisableVisualStyles = GetPrivateProfileInt(szSettings, szDisableVisualStyles, bDisableVisualStyles, szTheINIFile);
 
    bDriveBar       = GetPrivateProfileInt(szSettings, szDriveBar,      bDriveBar,      szTheINIFile);
    bToolbar        = GetPrivateProfileInt(szSettings, szToolbar,       bToolbar,       szTheINIFile);
@@ -407,7 +410,6 @@ InitMenus()
 
    if (nFloppies == 0) {
       EnableMenuItem(hMenu, IDM_DISKCOPY, MF_BYCOMMAND | MF_GRAYED);
-      EnableMenuItem(hMenu, IDM_FORMAT,   MF_BYCOMMAND | MF_GRAYED);
    }
 
 
@@ -415,6 +417,9 @@ InitMenus()
       CheckMenuItem(hMenu, IDM_STATUSBAR, MF_BYCOMMAND | MF_CHECKED);
    if (bMinOnRun)
       CheckMenuItem(hMenu, IDM_MINONRUN,  MF_BYCOMMAND | MF_CHECKED);
+   if (bIndexOnLaunch)
+      CheckMenuItem(hMenu, IDM_INDEXONLAUNCH, MF_BYCOMMAND | MF_CHECKED);
+
    if (bSaveSettings)
       CheckMenuItem(hMenu, IDM_SAVESETTINGS,  MF_BYCOMMAND | MF_CHECKED);
 
@@ -937,20 +942,13 @@ InitFileManager(
    //
    hAppInstance = hInstance;
 
-   lcid = GetThreadLocale();
-
-
-JAPANBEGIN
-   bJapan = (PRIMARYLANGID(LANGIDFROMLCID(lcid)) == LANG_JAPANESE);
-JAPANEND
-
    if (*lpCmdLine)
       nCmdShow = SW_SHOWMINNOACTIVE;
 
    // setup ini file location
    lstrcpy(szTheINIFile, szBaseINIFile);
    dwRetval = GetEnvironmentVariable(TEXT("APPDATA"), szBuffer, MAXPATHLEN);
-   if (dwRetval > 0 && dwRetval <= (MAXPATHLEN - lstrlen(szRoamINIPath) - 1 - lstrlen(szBaseINIFile) - 1)) {
+   if (dwRetval > 0 && dwRetval <= (DWORD)(MAXPATHLEN - lstrlen(szRoamINIPath) - 1 - lstrlen(szBaseINIFile) - 1)) {
 	   wsprintf(szTheINIFile, TEXT("%s%s"), szBuffer, szRoamINIPath);
 	   if (CreateDirectory(szTheINIFile, NULL) || GetLastError() == ERROR_ALREADY_EXISTS) {
 		   wsprintf(szTheINIFile, TEXT("%s%s\\%s"), szBuffer, szRoamINIPath, szBaseINIFile);
@@ -959,6 +957,26 @@ JAPANEND
 		   wsprintf(szTheINIFile, TEXT("%s\\%s"), szBuffer, szBaseINIFile);
 	   }
    }
+
+   // e.g., UILanguage=zh-CN; UI language defaults to OS set language or English if that language is not supported.
+   GetPrivateProfileString(szSettings, szUILanguage, szNULL, szTemp, COUNTOF(szTemp), szTheINIFile);
+   if (szTemp[0])
+   {
+       LCID lcidUI = LocaleNameToLCID(szTemp, 0);
+       if (lcidUI != 0)
+       {
+           SetThreadUILanguage((LANGID)lcidUI);
+
+           // update to current local used for dispaly
+           SetThreadLocale(lcidUI);
+       }
+   }
+
+   lcid = GetThreadLocale();
+
+JAPANBEGIN
+   bJapan = (PRIMARYLANGID(LANGIDFROMLCID(lcid)) == LANG_JAPANESE);
+JAPANEND
 
    //
    // Constructors for info system.
@@ -1014,6 +1032,8 @@ JAPANEND
    dyDriveBitmap = DRIVES_HEIGHT;
    dxFolder = FILES_WIDTH;
    dyFolder = FILES_HEIGHT;
+
+   LoadUxTheme();
 
    if (!LoadBitmaps())
       return FALSE;
@@ -1218,15 +1238,21 @@ JAPANEND
 
    // right and bottom are width and height, so convert to coordinates
 
+   // NOTE: in the cold startup case (no value in winfile.ini), the coordinates are
+   // left: CW_USEDEFAULT, top: 0, right: CW_USEDEFAULT, bottom: 0.
+
    win.rc.right += win.rc.left;
    win.rc.bottom += win.rc.top;
 
    if (!IntersectRect(&rcS, &rcT, &win.rc))
    {
-      // window off virtual screen or initial case; put in main work area on primary screen
-	   SystemParametersInfo(SPI_GETWORKAREA, 0, (PVOID)&rcT, 0);
-	   rcT.right = rcT.bottom = (LONG)CW_USEDEFAULT;
-       win.rc = rcT;
+      // window off virtual screen or initial case; reset to defaults
+       win.rc.right = win.rc.left = (LONG)CW_USEDEFAULT;
+       win.rc.top = win.rc.bottom = 0;
+
+       // compenstate as above so the conversion below still results in the defaults
+       win.rc.right += win.rc.left;
+       win.rc.bottom += win.rc.top;
    }
 
    // Now convert back again
@@ -1449,7 +1475,10 @@ JAPANEND
 
    SetThreadPriority(hThread, THREAD_PRIORITY_NORMAL);
 
-   StartBuildingDirectoryTrie();
+   if (bIndexOnLaunch)
+   {
+      StartBuildingDirectoryTrie();
+   }
 
    return TRUE;
 }
@@ -1587,5 +1616,54 @@ LoadFailMessage(VOID)
    return;
 }
 
-
-
+/////////////////////////////////////////////////////////////////////
+//
+// Name:     LoadUxTheme
+//
+// Synopsis: Loads function SetWindowTheme dynamically
+//
+// IN:       VOID
+//
+// Return:   BOOL  T=Success, F=FAILURE
+//
+//
+// Assumes:
+//
+// Effects:  hUxTheme, lpfnSetWindowTheme
+//
+//
+// Notes:
+//
+/////////////////////////////////////////////////////////////////////
+
+BOOL
+LoadUxTheme(VOID)
+{
+  UINT uErrorMode;
+
+  //
+  // Have we already loaded it?
+  //
+  if (hUxTheme)
+    return TRUE;
+
+  //
+  // Let the system handle errors here
+  //
+  uErrorMode = SetErrorMode(0);
+  hUxTheme = LoadLibrary(UXTHEME_DLL);
+  SetErrorMode(uErrorMode);
+
+  if (!hUxTheme)
+    return FALSE;
+
+#define GET_PROC(x) \
+   if (!(lpfn##x = (PVOID) GetProcAddress(hUxTheme, UXTHEME_##x))) \
+      return FALSE
+
+  GET_PROC(SetWindowTheme);
+
+#undef GET_PROC
+
+  return TRUE;
+}

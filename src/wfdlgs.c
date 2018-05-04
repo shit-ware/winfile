@@ -42,7 +42,10 @@ SaveWindows(HWND hwndMain)
 
    SystemParametersInfo(SPI_GETWORKAREA, 0, (PVOID)&rcT, 0);
 
-   wsprintf(buf2, TEXT("%d,%d,%d,%d, , ,%d"), rcT.left + wp.rcNormalPosition.left,
+   // WINDOWPLACEMENT coordinates for top-level windows are in Workspace coordinates;
+   // we tranlate this into screen coordinates prior to saving;
+   // also, the values saved for the third and fourth values are width and height.
+   wsprintf(buf2, TEXT("%ld,%ld,%ld,%ld, , ,%u"), rcT.left + wp.rcNormalPosition.left,
       rcT.top + wp.rcNormalPosition.top,
       wp.rcNormalPosition.right - wp.rcNormalPosition.left,
       wp.rcNormalPosition.bottom - wp.rcNormalPosition.top,
@@ -90,7 +93,8 @@ DO_AGAIN:
          //   x_icon, y_icon,
          //   show_window, view, sort, attribs, split, directory
 
-         wsprintf(buf2, TEXT("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s"),
+         // NOTE: MDI child windows are in child coordinats; no translation is done.
+         wsprintf(buf2, TEXT("%ld,%ld,%ld,%ld,%ld,%ld,%u,%lu,%lu,%lu,%d,%s"),
             wp.rcNormalPosition.left, wp.rcNormalPosition.top,
             wp.rcNormalPosition.right, wp.rcNormalPosition.bottom,
             wp.ptMinPosition.x, wp.ptMinPosition.y,
@@ -692,6 +696,95 @@ DoHelp:
                 return FALSE;
      }
   return TRUE;
+}
+
+INT_PTR  PrefDlgProc(HWND hDlg, UINT wMsg, WPARAM wParam, LPARAM lParam)
+{
+    /* Editor prefrence variables*/
+    TCHAR szTempEditPath[MAX_PATH];
+    TCHAR szPath[MAX_PATH];
+    TCHAR szFilter[MAX_PATH] = { 0 };
+
+    LoadString(hAppInstance, IDS_EDITFILTER, szFilter, MAX_PATH);
+
+    OPENFILENAME ofn;
+
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hDlg;
+    ofn.lpstrFile = szPath;
+    ofn.lpstrFile[0] = '\0';
+    ofn.nMaxFile = sizeof(szPath);
+    ofn.lpstrFilter = szFilter;
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = NULL;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+    /* Language prefrence variables */
+    HWND hLangComboBox = GetDlgItem(hDlg, IDC_LANGCB);
+
+    switch (wMsg)
+    {
+        case WM_INITDIALOG:
+            InitLangList(hLangComboBox);
+
+            GetPrivateProfileString(szSettings, szEditorPath, NULL, szTempEditPath, MAX_PATH, szTheINIFile);
+            SetDlgItemText(hDlg, IDD_EDITOR, szTempEditPath);
+
+            CheckDlgButton(hDlg, IDC_VSTYLE, bDisableVisualStyles);
+            CheckDlgButton(hDlg, IDC_GOTO, bIndexOnLaunch);
+            break;
+
+        case WM_COMMAND:
+            switch (GET_WM_COMMAND_ID(wParam, lParam))
+            {
+                case IDD_HELP:
+                    goto DoHelp;
+
+                case IDC_EDITOR:
+                    if (!LoadComdlg())
+                        break;
+
+                    if ((*lpfnGetOpenFileNameW)(&ofn))
+                    {
+                        wcscpy_s(szPath, MAX_PATH, ofn.lpstrFile);
+                        SetDlgItemText(hDlg, IDD_EDITOR, szPath);
+                    }
+                    break;
+
+                case IDOK:
+                    SaveLang(hLangComboBox);
+
+                    GetDlgItemText(hDlg, IDD_EDITOR, szTempEditPath, MAX_PATH);
+                    WritePrivateProfileString(szSettings, szEditorPath, szTempEditPath, szTheINIFile);
+
+                    bDisableVisualStyles = IsDlgButtonChecked(hDlg, IDC_VSTYLE);
+                    bIndexOnLaunch = IsDlgButtonChecked(hDlg, IDC_GOTO);
+                    WritePrivateProfileBool(szDisableVisualStyles, bDisableVisualStyles);
+                    WritePrivateProfileBool(szIndexOnLaunch, bIndexOnLaunch);
+
+                    EndDialog(hDlg, TRUE);
+                    break;
+
+                case IDCANCEL:
+                    EndDialog(hDlg, FALSE);
+                    break;
+            }
+            break;
+
+        default:
+            if (wMsg == wHelpMessage) {
+DoHelp:
+                WFHelp(hDlg);
+
+                return TRUE;
+            }
+            else
+                return FALSE;
+    }
+    return TRUE;
 }
 
 

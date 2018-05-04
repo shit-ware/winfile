@@ -19,7 +19,9 @@
 #include <commctrl.h>
 #include <ole2.h>
 
+#ifndef HELP_PARTIALKEY
 #define HELP_PARTIALKEY 0x0105L    // call the search engine in winhelp
+#endif
 
 #define VIEW_NOCHANGE VIEW_PLUSES
 
@@ -599,7 +601,7 @@ OpenOrEditSelection(HWND hwndActive, BOOL fEdit)
    DWORD ret;
    HCURSOR hCursor;
 
-   WCHAR szPath[MAXPATHLEN];
+   WCHAR szPath[MAXPATHLEN+2];  // +2 for quotes if needed
 
    HWND hwndTree, hwndDir, hwndFocus;
 
@@ -646,7 +648,8 @@ OpenOrEditSelection(HWND hwndActive, BOOL fEdit)
    if (!p)
       goto OpenExit;
 
-   if (!GetNextFile(p, szPath, COUNTOF(szPath)) || !szPath[0])
+   // less 2 characters in case we need to add quotes below
+   if (!GetNextFile(p, szPath, COUNTOF(szPath)-2) || !szPath[0])
       goto OpenFreeExit;
 
    if (bDir) {
@@ -689,30 +692,25 @@ OpenOrEditSelection(HWND hwndActive, BOOL fEdit)
       //
       if (fEdit)
       {
-          // check if notepad++ exists: %ProgramFiles%\Notepad++\notepad++.exe
-          TCHAR szToRun[MAXPATHLEN];
+          TCHAR szEditPath[MAX_PATH];
+          TCHAR szNotepad[MAX_PATH];
 
-          DWORD cchEnv = GetEnvironmentVariable(TEXT("ProgramFiles"), szToRun, MAXPATHLEN);
-          if (cchEnv != 0)
-          {
-            // NOTE: assume ProgramFiles directory and "\\Notepad++\\notepad++.exe" never exceed MAXPATHLEN
-            lstrcat(szToRun, TEXT("\\Notepad++\\notepad++.exe"));
-            if (!PathFileExists(szToRun))
-            {
-                cchEnv = 0;
-            }
-          }
+          // NOTE: assume system directory and "\\notepad.exe" never exceed MAXPATHLEN
+          if (GetSystemDirectory(szNotepad, MAXPATHLEN) != 0)
+              lstrcat(szNotepad, TEXT("\\notepad.exe"));
+          else
+              lstrcpy(szNotepad, TEXT("notepad.exe"));
 
-          if (cchEnv == 0)
-          {
-              // NOTE: assume system directory and "\\notepad.exe" never exceed MAXPATHLEN
-              if (GetSystemDirectory(szToRun, MAXPATHLEN) != 0)
-                  lstrcat(szToRun, TEXT("\\notepad.exe"));
-              else
-                  lstrcpy(szToRun, TEXT("notepad.exe"));
-          }
+          GetPrivateProfileString(szSettings, szEditorPath, szNotepad, szEditPath, MAX_PATH, szTheINIFile);
 
-          ret = ExecProgram(szToRun, szPath, NULL, (GetKeyState(VK_SHIFT) < 0), FALSE);
+          CheckEsc(szPath);     // add quotes if necessary; reserved space for them above
+
+          if(wcslen(szEditPath))
+             ret = ExecProgram(szEditPath, szPath, NULL, (GetKeyState(VK_SHIFT) < 0), FALSE);
+          //If INI entry is empty
+          else
+             ret = ExecProgram(szNotepad, szPath, NULL, (GetKeyState(VK_SHIFT) < 0), FALSE);
+
       }
       else
       {
@@ -852,6 +850,28 @@ GetPowershellExePath(LPTSTR szPSPath)
     return szPSPath[0] != TEXT('\0');
 }
 
+BOOL GetBashExePath(LPTSTR szBashPath, UINT bufSize)
+{
+	const TCHAR szBashFilename[] = TEXT("bash.exe");
+	UINT len;
+
+	len = GetSystemDirectory(szBashPath, bufSize);
+	if ((len != 0) && (len + COUNTOF(szBashFilename) + 1 < bufSize) && PathAppend(szBashPath, TEXT("bash.exe")))
+	{
+		if (PathFileExists(szBashPath))
+			return TRUE;
+	}
+
+	// If we are running 32 bit Winfile on 64 bit Windows, System32 folder is redirected to SysWow64, which
+	// doesn't include bash.exe. So we also need to check Sysnative folder, which always maps to System32 folder.
+	len = ExpandEnvironmentStrings(TEXT("%SystemRoot%\\Sysnative\\bash.exe"), szBashPath, bufSize);
+	if (len != 0 && len <= bufSize)
+	{
+		return PathFileExists(szBashPath);
+	}
+
+	return FALSE;
+}
 /*--------------------------------------------------------------------------*/
 /*                                                                          */
 /*  AppCommandProc() -                                                      */
@@ -1076,6 +1096,27 @@ AppCommandProc(register DWORD id)
            LocalFree(szDir);
        }
        break;
+
+	case IDM_STARTBASHSHELL:
+		{
+			BOOL bRunAs;
+			BOOL bDir;
+			TCHAR szToRun[MAXPATHLEN];
+			LPTSTR szDir;
+
+			szDir = GetSelection(1 | 4 | 16, &bDir);
+			if (!bDir && szDir)
+				StripFilespec(szDir);
+
+			bRunAs = GetKeyState(VK_SHIFT) < 0;
+
+			if (GetBashExePath(szToRun, COUNTOF(szToRun))) {
+				ret = ExecProgram(szToRun, NULL, szDir, FALSE, bRunAs);
+			}
+
+			LocalFree(szDir);
+		}
+		break;
 
    case IDM_SELECT:
 
@@ -1587,28 +1628,17 @@ AppCommandProc(register DWORD id)
 
    case IDM_FORMAT:
 
-      if (CancelInfo.hCancelDlg) {
-         SetFocus(CancelInfo.hCancelDlg);
-         break;
+      if (!hwndFormatSelect)
+      {
+         hwndFormatSelect = CreateDialog(hAppInstance, (LPTSTR)MAKEINTRESOURCE(FORMATSELECTDLG),
+            hwndFrame, (DLGPROC)FormatSelectDlgProc);
+      }
+      else
+      {
+         ShowWindow(hwndFormatSelect, SW_SHOW);
+         SetActiveWindow(hwndFormatSelect);
       }
 
-      if (CancelInfo.hThread) {
-         //
-         // Don't create any new worker threads
-         // Just create old dialog
-         //
-
-         CreateDialog(hAppInstance, (LPTSTR) MAKEINTRESOURCE(CANCELDLG), hwndFrame, (DLGPROC) CancelDlgProc);
-
-         return TRUE;
-      }
-
-      if (!FmifsLoaded())
-         break;
-
-      // Don't use modal dialog box
-
-      FormatDiskette(hwndFrame,FALSE);
       break;
 
    case IDM_SHAREAS:
@@ -1869,6 +1899,10 @@ ChangeDisplay:
        DialogBox(hAppInstance, (LPTSTR) MAKEINTRESOURCE(CONFIRMDLG), hwndFrame, (DLGPROC)ConfirmDlgProc);
        break;
 
+    case IDM_PREF:
+       DialogBox(hAppInstance, (LPTSTR) MAKEINTRESOURCE(PREFDLG), hwndFrame, (DLGPROC)PrefDlgProc);
+       break;
+
     case IDM_STATUSBAR:
        bTemp = bStatusBar = !bStatusBar;
        WritePrivateProfileBool(szStatusBar, bStatusBar);
@@ -1972,6 +2006,12 @@ ChangeDisplay:
     case IDM_MINONRUN:
        bTemp = bMinOnRun = !bMinOnRun;
        WritePrivateProfileBool(szMinOnRun, bMinOnRun);
+       goto CHECK_OPTION;
+
+    case IDM_INDEXONLAUNCH:
+       bTemp = bIndexOnLaunch = !bIndexOnLaunch;
+       WritePrivateProfileBool(szIndexOnLaunch, bIndexOnLaunch);
+       goto CHECK_OPTION;
 
 CHECK_OPTION:
        //
@@ -2079,8 +2119,7 @@ ACPCallHelp:
        break;
 
     case IDM_ABOUT:
-       LoadString(hAppInstance, IDS_WINFILE, szTitle, COUNTOF(szTitle));
-       ShellAbout(hwndFrame, szTitle, NULL, NULL);
+       DialogBox(hAppInstance, (LPTSTR)MAKEINTRESOURCE(ABOUTDLG), hwndFrame, (DLGPROC)AboutDlgProc);
        break;
 
     case IDM_DRIVESMORE:
@@ -2114,7 +2153,7 @@ ACPCallHelp:
 // OUT: VOID
 // Precond: System directory is on a safe hard disk
 //          szMessage not being used
-// Postcond: Swich to this directory.
+// Postcond: Switch to this directory.
 //          szMessage trashed.
 
 VOID

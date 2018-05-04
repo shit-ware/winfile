@@ -272,6 +272,8 @@ ResizeSplit(HWND hwnd, INT dxSplit)
 
    SetWindowLongPtr(hwnd, GWL_SPLIT, dxSplit);
 
+   SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)GetTreeIcon(hwnd));
+
    UpdateStatus(hwnd);
    EnableCheckTBButtons(hwnd);
 
@@ -931,4 +933,3 @@ ResizeWindows(HWND hwndParent,INT dxWindow, INT dyWindow)
    UpdateWindow(hwndParent);
 }
 
-

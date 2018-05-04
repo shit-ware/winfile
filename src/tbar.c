@@ -19,7 +19,7 @@
 // LATER: create a specific global for this to avoid
 // redundant computations.
 
-// ASSUMES: height of combob-padding > size of bitmap!
+// ASSUMES: height of combobox-padding > size of bitmap!
 
 
 #define MAXDESCLEN              128
@@ -800,7 +800,7 @@ ExtensionHelp:
 
 NormalHelp:
          MenuHelp((WORD)uMsg, wParam, lParam, GetMenu(hwndFrame),
-            hAppInstance, hwndStatus, dwMenuIDs);
+            hAppInstance, hwndStatus, (LPUINT)dwMenuIDs);
       } else {
          uID = uItem;
 
@@ -1105,6 +1105,9 @@ CreateFMToolbar(void)
    if (!hwndToolbar)
       return;
 
+   if (bDisableVisualStyles)
+     SetWindowTheme(hwndToolbar, pwszInvalidTheme, pwszInvalidTheme);
+
    SendMessage (hwndToolbar, TB_SETINDENT, 8, 0);
 
    tbAddBitmap.hInst = hAppInstance;
@@ -1126,6 +1129,9 @@ CreateFMToolbar(void)
       hwndToolbar = NULL;
       return;
    }
+
+   if (bDisableVisualStyles)
+     SetWindowTheme(hwndDriveList, pwszInvalidTheme, pwszInvalidTheme);
 
    SendMessage(hwndDriveList, CB_SETEXTENDEDUI, 0, 0L);
    SendMessage(hwndDriveList, WM_SETFONT, (WPARAM)hfontDriveList, MAKELPARAM(TRUE, 0));
@@ -1274,12 +1280,12 @@ AddSep:
 
    if (tbl.idBitmap) {
       tbAddBitmap.hInst = extensions[iExt].hModule;
-      tbAddBitmap.nID   = tbl.idBitmap;
+      tbAddBitmap.nID   = (UINT_PTR)tbl.idBitmap;
       iStart = (INT)SendMessage(hwndToolbar, TB_ADDBITMAP, tbl.cButtons,
                                (LPARAM) &tbAddBitmap);
    } else {
       tbAddBitmap.hInst = 0;
-      tbAddBitmap.nID   = (UINT)tbl.hBitmap;
+      tbAddBitmap.nID   = (UINT_PTR)tbl.hBitmap;
       iStart = (INT)SendMessage(hwndToolbar, TB_ADDBITMAP, tbl.cButtons,
                                (LPARAM) &tbAddBitmap);
    }
@@ -1304,6 +1310,8 @@ AddSep:
       extButton.fsStyle   = (BYTE)lpButton->fsStyle;
       extButton.idCommand = lpButton->idCommand + extensions[iExt].Delta;
       extButton.fsState   = TBSTATE_ENABLED;
+      extButton.dwData    = 0;
+      extButton.iString   = 0;
 
       SendMessage(hwndExtensions, TB_INSERTBUTTON, (WORD)-1,
          (LPARAM)(LPTBBUTTON)&extButton);
@@ -1325,7 +1333,6 @@ FreeToolbarExtensions(VOID)
 VOID
 SaveRestoreToolbar(BOOL bSave)
 {
-   static LPTSTR aNames[] = { szSettings, szTheINIFile } ;
    static TCHAR  szSubKey[] = TEXT("Software\\Microsoft\\File Manager\\Settings");
    static TCHAR  szValueName [] = TEXT("ToolbarWindow");
 
